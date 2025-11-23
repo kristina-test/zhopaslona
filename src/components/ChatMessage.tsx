@@ -1,12 +1,18 @@
 import React from 'react'
 
+interface SearchLink {
+  url: string
+  pageUrl: string
+}
+
 interface ChatMessageProps {
   text: string
   imageUrl?: string
   isLoading?: boolean
+  searchLinks?: SearchLink[]
 }
 
-const ChatMessage: React.FC<ChatMessageProps> = ({ text, imageUrl, isLoading }) => {
+const ChatMessage: React.FC<ChatMessageProps> = ({ text, imageUrl, isLoading, searchLinks }) => {
   return (
     <div className="flex gap-4 mb-4 w-full">
       {/* Left side: Image */}
@@ -45,15 +51,30 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ text, imageUrl, isLoading }) 
         )}
       </div>
 
-      {/* Right side: Text - in one line */}
-      <div className="flex-1 flex items-center">
-        <div 
-          className="bg-white rounded-lg p-4 shadow-md max-w-md"
-          title={text}
-        >
-          <p className="text-gray-800 text-sm whitespace-nowrap overflow-hidden text-ellipsis">
+      {/* Right side: Text and Links */}
+      <div className="flex-1 flex items-start">
+        <div className="bg-white rounded-lg p-4 shadow-md max-w-md w-full">
+          <p className="text-gray-800 text-sm mb-2">
             {text}
           </p>
+          {searchLinks && searchLinks.length > 0 && (
+            <div className="mt-3 space-y-2">
+              {searchLinks.map((link, index) => (
+                <div key={index} className="text-sm">
+                  <div className="font-medium text-gray-700">
+                    {index + 1}. <a href={link.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline break-all">
+                      {link.url}
+                    </a>
+                  </div>
+                  <div className="ml-4 text-gray-600">
+                    <a href={link.pageUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline break-all">
+                      {link.pageUrl}
+                    </a>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

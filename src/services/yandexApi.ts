@@ -136,3 +136,104 @@ export async function generateImage(text: string): Promise<string> {
   throw new Error('Image generation timeout - operation took too long')
 }
 
+interface SearchResultItem {
+  url: string
+  format: string
+  width: string
+  height: string
+  passage: string
+  host: string
+  pageTitle: string
+  pageUrl: string
+}
+
+
+export async function searchByImage(base64Image: string): Promise<SearchResultItem[]> {
+  const FOLDER_ID = import.meta.env.VITE_YANDEX_FOLDER_ID
+  const API_KEY = import.meta.env.VITE_YANDEX_API_KEY
+
+  if (!FOLDER_ID || !API_KEY) {
+    throw new Error('Yandex API credentials are not configured. Please check your .env file.')
+  }
+
+  // Remove data URL prefix if present
+  const cleanBase64 = base64Image.replace(/^data:image\/[a-z]+;base64,/, '')
+
+  // Create body.json content
+  const bodyData = {
+    folderId: FOLDER_ID,
+    data: cleanBase64,
+    page: "1"
+  }
+
+  const bodyJson = JSON.stringify(bodyData, null, 2)
+
+  // Save body.json to project folder via API endpoint
+  try {
+    await fetch('/api/save-file', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        filename: 'body.json',
+        content: bodyJson
+      })
+    })
+  } catch (error) {
+    console.log('Could not save body.json:', error)
+  }
+
+  // Make the search request
+  const searchUrl = 'https://searchapi.api.cloud.yandex.net/v2/image/search_by_image'
+  
+  const response = await fetch(searchUrl, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Api-Key ${API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: bodyJson
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`Failed to search by image: ${response.status} - ${errorText}`)
+  }
+
+  const result: any = await response.json()
+
+  // Save result.json to project folder via API endpoint
+  const resultJson = JSON.stringify(result, null, 2)
+  try {
+    await fetch('/api/save-file', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        filename: 'result.json',
+        content: resultJson
+      })
+    })
+  } catch (error) {
+    console.log('Could not save result.json:', error)
+  }
+
+  // Handle different response formats:
+  // 1. Object with results array: { results: [...] }
+  // 2. Array directly: [...]
+  // 3. Single object: { url: ..., pageUrl: ... }
+  let results: SearchResultItem[] = []
+  if (Array.isArray(result)) {
+    results = result
+  } else if (result.results && Array.isArray(result.results)) {
+    results = result.results
+  } else if (result.url && result.pageUrl) {
+    // Single object
+    results = [result]
+  }
+
+  return results
+}
+

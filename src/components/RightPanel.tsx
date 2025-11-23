@@ -1,13 +1,22 @@
 import React, { useState } from 'react'
 import ChatMessage from './ChatMessage'
-import { generateImage } from '../services/yandexApi'
+import { generateImage, searchByImage } from '../services/yandexApi'
+
+interface SearchLink {
+  url: string
+  pageUrl: string
+}
 
 interface ChatItem {
   id: number
   text: string
   imageUrl?: string
+  base64Image?: string
   isLoading: boolean
   error?: string
+  awaitingConfirmation?: boolean
+  searchLinks?: SearchLink[]
+  isSearching?: boolean
 }
 
 const RightPanel: React.FC = () => {
@@ -20,6 +29,69 @@ const RightPanel: React.FC = () => {
 
     const userText = inputText.trim()
     setInputText('')
+
+    // Check if user is responding to confirmation
+    const lowerText = userText.toLowerCase()
+    if (lowerText === 'да' || lowerText === 'нет') {
+      // Find the last message awaiting confirmation
+      const lastMessageIndex = chatHistory.length - 1
+      if (lastMessageIndex >= 0 && chatHistory[lastMessageIndex].awaitingConfirmation) {
+        const lastMessage = chatHistory[lastMessageIndex]
+        
+        if (lowerText === 'да' && lastMessage.base64Image) {
+          // Start search by image
+          setChatHistory(prev =>
+            prev.map((msg, idx) =>
+              idx === lastMessageIndex
+                ? { ...msg, awaitingConfirmation: false, isSearching: true }
+                : msg
+            )
+          )
+
+          try {
+            const results = await searchByImage(lastMessage.base64Image)
+            
+            // Extract url and pageUrl from results
+            const links: SearchLink[] = results.map((item) => ({
+              url: item.url,
+              pageUrl: item.pageUrl
+            }))
+
+            setChatHistory(prev =>
+              prev.map((msg, idx) =>
+                idx === lastMessageIndex
+                  ? { ...msg, isSearching: false, searchLinks: links }
+                  : msg
+              )
+            )
+          } catch (error) {
+            console.error('Error searching by image:', error)
+            setChatHistory(prev =>
+              prev.map((msg, idx) =>
+                idx === lastMessageIndex
+                  ? {
+                      ...msg,
+                      isSearching: false,
+                      error: error instanceof Error ? error.message : 'Ошибка поиска по изображению'
+                    }
+                  : msg
+              )
+            )
+            alert(error instanceof Error ? error.message : 'Ошибка поиска по изображению')
+          }
+        } else if (lowerText === 'нет') {
+          // User declined, remove confirmation state
+          setChatHistory(prev =>
+            prev.map((msg, idx) =>
+              idx === lastMessageIndex
+                ? { ...msg, awaitingConfirmation: false }
+                : msg
+            )
+          )
+        }
+      }
+      return
+    }
 
     // Add message to chat with loading state
     const newMessage: ChatItem = {
@@ -40,13 +112,27 @@ const RightPanel: React.FC = () => {
         ? imageUrl 
         : `data:image/png;base64,${imageUrl}`
       
-      setChatHistory(prev =>
-        prev.map(msg =>
+      // Store base64 image (without data URL prefix for API call)
+      const base64Image = imageUrl.startsWith('data:') 
+        ? imageUrl.split(',')[1]
+        : imageUrl
+
+      setChatHistory(prev => {
+        const updated = prev.map(msg =>
           msg.id === newMessage.id
-            ? { ...msg, imageUrl: displayImageUrl, isLoading: false }
+            ? { ...msg, imageUrl: displayImageUrl, base64Image, isLoading: false, awaitingConfirmation: true }
             : msg
         )
-      )
+        
+        // Add confirmation message
+        const confirmationMessage: ChatItem = {
+          id: Date.now() + 1,
+          text: 'подтвердите дизайн. Да/Нет',
+          isLoading: false
+        }
+        
+        return [...updated, confirmationMessage]
+      })
     } catch (error) {
       console.error('Error generating image:', error)
       // Update message to show error
@@ -90,7 +176,8 @@ const RightPanel: React.FC = () => {
                 key={item.id}
                 text={item.text}
                 imageUrl={item.imageUrl}
-                isLoading={item.isLoading}
+                isLoading={item.isLoading || item.isSearching}
+                searchLinks={item.searchLinks}
               />
             ))}
           </div>

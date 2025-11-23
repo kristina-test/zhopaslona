@@ -3,6 +3,7 @@
 interface ImportMetaEnv {
   readonly VITE_YANDEX_API_KEY: string
   readonly VITE_YANDEX_MODEL_URI: string
+  readonly VITE_YANDEX_FOLDER_ID: string
 }
 
 interface ImportMeta {
