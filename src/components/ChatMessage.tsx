@@ -10,67 +10,59 @@ interface ChatMessageProps {
   imageUrl?: string
   isLoading?: boolean
   searchLinks?: SearchLink[]
+  isUser?: boolean
 }
 
-const ChatMessage: React.FC<ChatMessageProps> = ({ text, imageUrl, isLoading, searchLinks }) => {
-  return (
-    <div className="flex gap-4 mb-4 w-full">
-      {/* Left side: Image */}
-      <div className="flex-shrink-0">
-        {isLoading ? (
-          <div className="w-48 h-48 bg-white rounded-lg flex items-center justify-center border-2 border-gray-300 shadow-md">
-            <div className="text-gray-500 text-sm">Загрузка...</div>
+const ChatMessage: React.FC<ChatMessageProps> = ({ text, imageUrl, isLoading, searchLinks, isUser = false }) => {
+  if (isUser) {
+    // User message - right aligned with pink icon
+    return (
+      <div className="flex justify-end mb-4 w-full">
+        <div className="flex items-start gap-2 max-w-[70%]">
+          <div className="bg-blue-500 rounded-lg px-4 py-2 shadow-md">
+            <p className="text-white text-sm">{text}</p>
           </div>
-        ) : imageUrl ? (
-          <div className="w-48 h-48 bg-white rounded-lg flex items-center justify-center border-2 border-gray-300 shadow-md overflow-hidden">
-            <img
-              src={imageUrl}
-              alt="Generated"
-              className="w-full h-full object-contain"
-              onError={(e) => {
-                const target = e.currentTarget
-                target.style.display = 'none'
-                if (target.parentElement) {
-                  const fallback = target.parentElement.querySelector('.fallback-text')
-                  if (fallback) {
-                    fallback.classList.remove('hidden')
-                  }
-                }
-              }}
-            />
-            <div className="hidden fallback-text text-gray-500 text-sm text-center px-4">
-              Ошибка загрузки изображения
-            </div>
+          <div className="w-8 h-8 rounded-full bg-pink-400 flex items-center justify-center flex-shrink-0">
+            <span className="text-white font-semibold text-sm">K</span>
           </div>
-        ) : (
-          <div className="w-48 h-48 bg-white rounded-lg flex items-center justify-center border-2 border-gray-300 shadow-md">
-            <div className="text-gray-500 text-sm text-center px-4">
-              Ожидание изображения...
-            </div>
-          </div>
-        )}
+        </div>
       </div>
+    )
+  }
 
-      {/* Right side: Text and Links */}
-      <div className="flex-1 flex items-start">
-        <div className="bg-white rounded-lg p-4 shadow-md max-w-md w-full">
-          <p className="text-gray-800 text-sm mb-2">
-            {text}
-          </p>
+  // AI message - left aligned with yellow icon
+  return (
+    <div className="flex justify-start mb-4 w-full">
+      <div className="flex items-start gap-2 max-w-[70%]">
+        <div className="w-8 h-8 rounded-full bg-yellow-400 flex items-center justify-center flex-shrink-0">
+          <span className="text-white font-semibold text-sm">Ч</span>
+        </div>
+        <div className="bg-blue-500 rounded-lg px-4 py-2 shadow-md">
+          {isLoading ? (
+            <div className="text-white text-sm">Загрузка...</div>
+          ) : imageUrl ? (
+            <div className="mb-2">
+              <img
+                src={imageUrl}
+                alt="Generated"
+                className="max-w-full h-auto rounded"
+                onError={(e) => {
+                  const target = e.currentTarget
+                  target.style.display = 'none'
+                }}
+              />
+            </div>
+          ) : null}
+          {text && (
+            <p className="text-white text-sm mb-2">{text}</p>
+          )}
           {searchLinks && searchLinks.length > 0 && (
-            <div className="mt-3 space-y-2">
+            <div className="mt-2 space-y-1">
               {searchLinks.map((link, index) => (
-                <div key={index} className="text-sm">
-                  <div className="font-medium text-gray-700">
-                    {index + 1}. <a href={link.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline break-all">
-                      {link.url}
-                    </a>
-                  </div>
-                  <div className="ml-4 text-gray-600">
-                    <a href={link.pageUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline break-all">
-                      {link.pageUrl}
-                    </a>
-                  </div>
+                <div key={index} className="text-white text-sm">
+                  {index + 1}. <a href={link.url} target="_blank" rel="noopener noreferrer" className="underline hover:no-underline">
+                    Ссылка
+                  </a>
                 </div>
               ))}
             </div>

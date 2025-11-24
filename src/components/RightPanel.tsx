@@ -17,6 +17,7 @@ interface ChatItem {
   awaitingConfirmation?: boolean
   searchLinks?: SearchLink[]
   isSearching?: boolean
+  isUser?: boolean
 }
 
 const RightPanel: React.FC = () => {
@@ -33,23 +34,36 @@ const RightPanel: React.FC = () => {
     // Check if user is responding to confirmation
     const lowerText = userText.toLowerCase()
     if (lowerText === 'да' || lowerText === 'нет') {
-      // Find the last message awaiting confirmation
-      const lastMessageIndex = chatHistory.length - 1
-      if (lastMessageIndex >= 0 && chatHistory[lastMessageIndex].awaitingConfirmation) {
-        const lastMessage = chatHistory[lastMessageIndex]
+      // Find the message with image awaiting confirmation (before adding user message)
+      const messageWithImageIndex = chatHistory.findIndex(
+        msg => msg.base64Image && msg.awaitingConfirmation
+      )
+      
+      // Add user's message to chat first
+      const userMessage: ChatItem = {
+        id: Date.now(),
+        text: userText,
+        isLoading: false,
+        isUser: true
+      }
+      
+      setChatHistory(prev => [...prev, userMessage])
+
+      if (messageWithImageIndex >= 0) {
+        const messageWithImage = chatHistory[messageWithImageIndex]
         
-        if (lowerText === 'да' && lastMessage.base64Image) {
+        if (lowerText === 'да' && messageWithImage.base64Image) {
           // Start search by image
           setChatHistory(prev =>
             prev.map((msg, idx) =>
-              idx === lastMessageIndex
+              idx === messageWithImageIndex
                 ? { ...msg, awaitingConfirmation: false, isSearching: true }
                 : msg
             )
           )
 
           try {
-            const results = await searchByImage(lastMessage.base64Image)
+            const results = await searchByImage(messageWithImage.base64Image)
             
             // Extract url and pageUrl from results
             const links: SearchLink[] = results.map((item) => ({
@@ -59,7 +73,7 @@ const RightPanel: React.FC = () => {
 
             setChatHistory(prev =>
               prev.map((msg, idx) =>
-                idx === lastMessageIndex
+                idx === messageWithImageIndex
                   ? { ...msg, isSearching: false, searchLinks: links }
                   : msg
               )
@@ -68,7 +82,7 @@ const RightPanel: React.FC = () => {
             console.error('Error searching by image:', error)
             setChatHistory(prev =>
               prev.map((msg, idx) =>
-                idx === lastMessageIndex
+                idx === messageWithImageIndex
                   ? {
                       ...msg,
                       isSearching: false,
@@ -83,7 +97,7 @@ const RightPanel: React.FC = () => {
           // User declined, remove confirmation state
           setChatHistory(prev =>
             prev.map((msg, idx) =>
-              idx === lastMessageIndex
+              idx === messageWithImageIndex
                 ? { ...msg, awaitingConfirmation: false }
                 : msg
             )
@@ -93,10 +107,20 @@ const RightPanel: React.FC = () => {
       return
     }
 
-    // Add message to chat with loading state
-    const newMessage: ChatItem = {
+    // Add user message to chat first
+    const userMessage: ChatItem = {
       id: Date.now(),
       text: userText,
+      isLoading: false,
+      isUser: true
+    }
+
+    setChatHistory(prev => [...prev, userMessage])
+
+    // Add AI message with loading state
+    const newMessage: ChatItem = {
+      id: Date.now() + 1,
+      text: '',
       isLoading: true
     }
 
@@ -126,8 +150,8 @@ const RightPanel: React.FC = () => {
         
         // Add confirmation message
         const confirmationMessage: ChatItem = {
-          id: Date.now() + 1,
-          text: 'подтвердите дизайн. Да/Нет',
+          id: Date.now() + 2,
+          text: 'Подтвердите дизайн',
           isLoading: false
         }
         
@@ -178,6 +202,7 @@ const RightPanel: React.FC = () => {
                 imageUrl={item.imageUrl}
                 isLoading={item.isLoading || item.isSearching}
                 searchLinks={item.searchLinks}
+                isUser={item.isUser}
               />
             ))}
           </div>

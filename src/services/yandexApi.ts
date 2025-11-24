@@ -31,6 +31,7 @@ const API_KEY = import.meta.env.VITE_YANDEX_API_KEY
 const MODEL_URI = import.meta.env.VITE_YANDEX_MODEL_URI
 // Use proxy to avoid CORS issues
 const BASE_URL = import.meta.env.DEV ? '/api/yandex' : 'https://llm.api.cloud.yandex.net'
+const SEARCH_BASE_URL = import.meta.env.DEV ? '/api/yandex-search' : 'https://searchapi.api.cloud.yandex.net'
 
 export async function generateImage(text: string): Promise<string> {
   if (!API_KEY || !MODEL_URI) {
@@ -150,31 +151,26 @@ interface SearchResultItem {
 
 export async function searchByImage(base64Image: string): Promise<SearchResultItem[]> {
   const FOLDER_ID = import.meta.env.VITE_YANDEX_FOLDER_ID
-  const API_KEY = import.meta.env.VITE_YANDEX_API_KEY
 
   if (!FOLDER_ID || !API_KEY) {
     throw new Error('Yandex API credentials are not configured. Please check your .env file.')
   }
 
-  // Remove data URL prefix if present
   const cleanBase64 = base64Image.replace(/^data:image\/[a-z]+;base64,/, '')
 
-  // Create body.json content
   const bodyData = {
     folderId: FOLDER_ID,
     data: cleanBase64,
-    page: "1"
+    page: '0' // первая страница, в доках нумерация с 0
   }
 
   const bodyJson = JSON.stringify(bodyData, null, 2)
 
-  // Save body.json to project folder via API endpoint
+  // Сохраняем body.json (как и раньше)
   try {
     await fetch('/api/save-file', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         filename: 'body.json',
         content: bodyJson
@@ -184,33 +180,52 @@ export async function searchByImage(base64Image: string): Promise<SearchResultIt
     console.log('Could not save body.json:', error)
   }
 
-  // Make the search request
-  const searchUrl = 'https://searchapi.api.cloud.yandex.net/v2/image/search_by_image'
-  
-  const response = await fetch(searchUrl, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Api-Key ${API_KEY}`,
-      'Content-Type': 'application/json'
-    },
-    body: bodyJson
-  })
+  const headers: HeadersInit = { 'Content-Type': 'application/json' }
 
-  if (!response.ok) {
-    const errorText = await response.text()
-    throw new Error(`Failed to search by image: ${response.status} - ${errorText}`)
+  if (import.meta.env.DEV) {
+    headers['X-Yandex-Api-Key'] = API_KEY
+  } else {
+    headers['Authorization'] = `Api-Key ${API_KEY}`
   }
 
-  const result: any = await response.json()
+  const response = await fetch(
+    `${SEARCH_BASE_URL}/v2/image/search_by_image`,
+    {
+      method: 'POST',
+      headers,
+      body: bodyJson
+    }
+  )
 
-  // Save result.json to project folder via API endpoint
+  const text = await response.text()
+
+  // Сохраняем даже ошибочный ответ
+  try {
+    await fetch('/api/save-file', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        filename: 'result-raw.json',
+        content: text
+      })
+    })
+  } catch (e) {
+    console.log('Could not save raw response:', e)
+  }
+
+  if (!response.ok) {
+    throw new Error(`Failed to search by image: ${response.status} - ${text}`)
+  }
+
+  // Если ок — парсим JSON
+  const result: any = JSON.parse(text)
+
+  // и сохраняем result.json как раньше
   const resultJson = JSON.stringify(result, null, 2)
   try {
     await fetch('/api/save-file', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         filename: 'result.json',
         content: resultJson
@@ -220,20 +235,11 @@ export async function searchByImage(base64Image: string): Promise<SearchResultIt
     console.log('Could not save result.json:', error)
   }
 
-  // Handle different response formats:
-  // 1. Object with results array: { results: [...] }
-  // 2. Array directly: [...]
-  // 3. Single object: { url: ..., pageUrl: ... }
-  let results: SearchResultItem[] = []
-  if (Array.isArray(result)) {
-    results = result
-  } else if (result.results && Array.isArray(result.results)) {
-    results = result.results
-  } else if (result.url && result.pageUrl) {
-    // Single object
-    results = [result]
-  }
+  // По доке ответ — это result.images, а не result.results
+  const items: SearchResultItem[] = Array.isArray(result.images)
+    ? result.images
+    : []
 
-  return results
+  return items
 }
 
